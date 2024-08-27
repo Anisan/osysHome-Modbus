@@ -1,0 +1,298 @@
+{% extends "layouts/module_admin.html" %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="Modbus">Modbus</a></li>
+{% endblock %}
+{% block module %}
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+<div id="edit_device">
+    <form @submit.prevent="updateDevice">
+        <div class="input-group my-3">
+            <span class="input-group-text" id="inputGroup-sizing-sm">Name</span>
+            <input type="text" class="form-control" id="name" v-model="device.title">
+        </div>
+        <div class="input-group mb-3">
+            <span class="input-group-text" id="inputGroup-sizing-sm">Protocol</span>
+            <select class="form-select" v-model="device.protocol">
+                <option value="TCP">TCP</option>
+                <option value="UDP">UDP</option>
+                <option value="COM">Serial</option>
+            </select>
+        </div>
+        <div class="input-group mb-3">
+            <span class="input-group-text" id="inputGroup-sizing-sm">Host</span>
+            <input type="text" class="form-control" id="name" v-model="device.host">
+        </div>
+        <div class="input-group mb-3">
+            <span class="input-group-text" id="inputGroup-sizing-sm">Port</span>
+            <input type="text" class="form-control" id="name" v-model="device.port">
+        </div>
+        <div class="input-group mb-3">
+            <span class="input-group-text" id="inputGroup-sizing-sm">Slave</span>
+            <input type="text" class="form-control" id="name" v-model="device.slave">
+        </div>
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">Tags</h5>
+                <a href="#" class="btn btn-primary" title="Add" @click="addTag()">Add tag</a>
+            </div>
+            <div class="card-body">
+        <div class="table-responsive" v-if="device.tags.filter(t => t.del !== true).length > 0">
+            <table class="table table-hover table-striped">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Data</th>
+                        <th>Value</th>
+                        <th>Link</th>
+                        <th>Checked</th>
+                        <th>&nbsp;</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(item,index) in device.tags.filter(t => t.del !== true)" :key="'cmnd_'+index">
+                        <td><b>[[ item.title ]]</b></td>
+                        <td>[[ item.value_original ]]</td>
+                        <td>[[ item.value ]]</td>
+                        <td>
+                            [[item.linked_object]].[[item.linked_property]]
+                        </td>
+                        <td>[[ item.checked ]]</td>
+                        <td>
+                            <a class="btn btn-success ms-2 ms-auto" @click="editTag(item)"><i class="fas fa-edit"></i></a>
+                            <a class="btn btn-danger ms-2 ms-auto" @click="delTag(item)"><i class="fas fa-trash"></i></a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div v-else >Empty</div>
+    </div>
+        </div>
+        <div class="my-2 mt-3">
+            <button class="btn btn-success" type="submit">
+                <span v-if="isSaving" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Save
+            </button>
+            <a href="Modbus" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+    <p>[[ message ]]</p>
+         <!-- Модальное окно тега -->
+         <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="exampleModalLabel">Settings tag</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div v-if="editedTag" class="modal-body">
+                        <div>
+                            <label class="form-label">Title</label>
+                            <input class="form-control" v-model="editedTag.title">
+                        </div>
+                        <div>
+                            <label class="form-label">Request type</label>
+                            <select class="form-select" v-model="editedTag.request_type">
+                                <option value="coils">Coils</option>
+                                <option value="discrete_inputs">Discrete inputs</option>
+                                <option value="holding_registers">Holding registers</option>
+                                <option value="input_registers">Input registers</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Request start</label>
+                            <input type="number" class="form-control" v-model="editedTag.request_start">
+                        </div>
+                        <div>
+                            <label class="form-label">Request total</label>
+                            <input type="number" class="form-control" v-model="editedTag.request_total">
+                        </div>
+                        <div>
+                            <label class="form-label">Bit order</label>
+                            <select class="form-select" v-model="editedTag.bit_order">
+                                <option value="be">Big endian</option>
+                                <option value="le">Little endian</option>
+                                <option value="beswap">Big endian byte swap</option>
+                                <option value="leswap">Little endian byte swap</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Multiplier</label>
+                            <input type="number" class="form-control" v-model="editedTag.multiplier">
+                        </div>
+                        <div>
+                            <label class="form-label">Pool period (ms)</label>
+                            <input type="number" class="form-control" v-model="editedTag.pool_period">
+                        </div>
+                        <div>
+                            <label class="form-label">Converter</label>
+                            <select class="form-select" v-model="editedTag.converter">
+                                <option value="">No convert</option>
+                                <option value="uint">Unsigned Integer</option>
+                                <option value="int">Integer</option>
+                                <option value="bool">Boolean</option>
+                                <option value="float">Float</option>
+                                <option value="string">String</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-check-label" for="flexCheckDefault">
+                                Linked object
+                            </label>
+                            <select-with-filter placeholder="Select object" :options="objectOptions" v-model="editedTag.linked_object" @changed="editedTag.linked_property = null"></select-with-filter>
+                        </div>
+                        <div v-if="editedTag.linked_object && editedTag.linked_object in objects">
+                            <label class="form-check-label" for="flexCheckDefault">
+                                Linked property
+                            </label>
+                            <select-with-filter placeholder="Select property" :options="objects[editedTag.linked_object].properties" v-model="editedTag.linked_property"></select-with-filter>
+                        </div>
+                        <div v-if="editedTag.linked_object">
+                            <input class="form-check-input" type="checkbox" v-model="editedTag.only_changed" >
+                            <label class="form-check-label">
+                                Only changed
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @click="saveTag()">Ok</button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    </div>
+                </div>
+            </div>
+    </div>
+</div>
+<script src="{{ config.ASSETS_ROOT }}/js/components/select-with-filter.js"></script>
+<script>
+    new Vue({
+        el: '#edit_device',
+        delimiters: ['[[', ']]'], // Измененные разделители
+        data: {
+            isSaving: false,
+            device: {
+                id: '', // Идентификатор 
+                title: '',
+                protocol: "TCP",
+                host: null,
+                port: null,
+                slave: null,
+                tags:[],
+            },
+            message: '',
+            objects:[],
+            isOpen:false,
+            defaultTag:{
+                id: null,
+                title: "",
+                request_type: "",
+                request_start:1,
+                request_total:1,
+                bit_order:"be",
+                converter:"",
+                multiplier:0,
+                pool_period:1000,
+                linked_object:null,
+                linked_property:null,
+                only_changed:true,
+            },
+            editedTag: null,
+            
+        },
+        async created() {
+            await this.fetchObjects()
+            const deviceId = '{{id}}';
+           //this.message = deviceId
+            if (deviceId != 'None')
+                this.fetchDevice(deviceId);
+        },
+        computed:{
+            objectOptions(){
+                list = {}
+                Object.keys(this.objects).forEach(key => {
+                    list[key] = this.objects[key].description
+                });
+                return list
+            },
+            tags(){
+               return this.device.tags.filter(t => t.del !== true)
+            }
+        },
+        methods: {
+            fetchObjects(){
+                axios.get(`/api/object/list/details`)
+                    .then(response => {
+                        this.objects = response.data.result
+                    })
+                    .catch(error => {
+                        console.log(error)
+                        this.message = 'Error fetching: ' + error;
+                    });
+            },
+            fetchDevice(deviceId) {
+                axios.get(`/Modbus/device/${deviceId}`)
+                    .then(response => {
+                        var device = response.data;
+                        this.device = device;
+                    })
+                    .catch(error => {
+                        console.log(error)
+                        this.message = 'Error fetching device: ' + error;
+                    });
+            },
+            updateDevice() {
+                this.isSaving = true
+                this.message = 'Saving...'
+                // Обновление данных пользователя на сервере
+                axios.post(`/Modbus/device/${this.device.id}`, this.device)
+                    .then(response => {
+                        this.message = 'Device updated successfully!';
+                        this.isSaving = false
+                        window.location.href = 'Modbus';
+                    })
+                    .catch(error => {
+                        this.message = 'Error updating device: ' + error;
+                        this.isSaving = false
+                    });
+            },
+            addTag(){
+                this.editedTag=Object.assign({},this.defaultTag)
+                console.log(this.editedTag)
+                $('#exampleModal').modal('show')
+            },
+            editTag(item){
+                this.editedTag=Object.assign({},item)
+                console.log(this.editedTag)
+                $('#exampleModal').modal('show')
+            },
+            delTag(item){
+                if (item.id < 0)
+                {
+                    var index = this.device.tags.findIndex(t => t.id === item.id)
+                    this.device.tags.splice(index, 1)
+                }
+                else
+                    Vue.set(item,"del", true)
+            },
+            saveTag(){
+                if (this.editedTag.id == null)
+                {
+                    this.editedTag.id = - (this.device.tags.length+1)
+                    this.device.tags.push(this.editedTag)
+                    console.log(this.device.tags, this.editedTag)
+                }
+                else {
+                    console.log(this.device.tags, this.editedTag)
+                    var index = this.device.tags.findIndex(t => t.id == this.editedTag.id)
+                    this.device.tags[index] = {...this.editedTag}
+                }
+                this.editedTag = null
+                $('#exampleModal').modal('hide')
+            }
+        }
+    });
+</script>
+    
+{% endblock %}

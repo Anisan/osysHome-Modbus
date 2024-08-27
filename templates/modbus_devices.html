@@ -1,0 +1,47 @@
+{% extends "layouts/module_admin.html" %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="Modbus">Modbus</a></li>
+{% endblock %}
+{% block module %}
+<a href="?op=add" class="btn btn-primary" title="Add">Add device</a>
+<div class="table-responsive">
+    <table class="table table-hover table-striped">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Protocol</th>
+                <th>Host</th>
+                <th>Port</th>
+                <th>Slave</th>
+                <th>&nbsp;</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for device in devices %}
+            <tr>
+                <td>
+                    <b>{{device.title}}</b>
+                </td>
+                <td>{{device.protocol}}</td>
+                <td>
+                  {{device.host}}
+                </td>
+                <td>
+                    {{device.port}}
+                </td>
+                 <td>
+                  {{device.slave}}
+                 </td>
+                 <td width="1%" nowrap>
+                  <div>
+                    <a href="?op=edit&device={{device.id}}" class="btn btn-secondary" title="Edit"><i class="feather icon-edit"></i></a>
+                    <a href="?op=delete&device={{device.id}}" onClick="return confirm('Are you sure? Please confirm.')" class="btn btn-danger" title="Delete"><i class="feather icon-trash"></i></a>
+                </div>
+                 </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
