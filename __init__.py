@@ -231,15 +231,15 @@ class Modbus(BasePlugin):
                                 setProperty(tag.linked_object + "." + tag.linked_property, value, self.name)
 
                     except ModbusException as exc:
-                        print(f"Received ModbusException({exc}) from library")
+                        self.logger.error(f"Received ModbusException({exc}) from library")
                         client.close()
                         
                     if rr and rr.isError():
-                        print(f"Received Modbus library error({rr})")
+                        self.logger.error(f"Received Modbus library error({rr})")
                         client.close()
                         
                     if isinstance(rr, ExceptionResponse):
-                        print(f"Received Modbus library exception ({rr})")
+                        self.logger.error(f"Received Modbus library exception ({rr})")
                         # THIS IS NOT A PYTHON EXCEPTION, but a valid modbus message
                         client.close()
 
@@ -318,7 +318,7 @@ class Modbus(BasePlugin):
                     client.write_registers(tag.request_start, registers, slave=device.slave)
 
                 except ModbusException as exc:
-                    print(f"Received ModbusException({exc}) from library")
+                    self.logger.error(f"Received ModbusException({exc}) from library")
                     client.close()
 
                 client.close()
