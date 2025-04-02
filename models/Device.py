@@ -1,6 +1,6 @@
 from app.database import Column, SurrogatePK, db
 
-class Device(SurrogatePK, db.Model):
+class ModbusDevice(SurrogatePK, db.Model):
     __tablename__ = 'modbus_devices'
     title = Column(db.String(100))
     host = Column(db.String(100))

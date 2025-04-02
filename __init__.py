@@ -10,7 +10,7 @@ from sqlalchemy import delete, or_
 from sqlalchemy.sql import func
 from app.database import session_scope, row2dict
 from app.core.main.BasePlugin import BasePlugin
-from plugins.Modbus.models.Device import Device
+from plugins.Modbus.models.Device import ModbusDevice
 from plugins.Modbus.models.Tags import Tag
 from app.authentication.handlers import handle_admin_required
 from app.core.lib.object import setProperty, updateProperty, setLinkToObject, removeLinkFromObject
@@ -53,12 +53,12 @@ class Modbus(BasePlugin):
             with session_scope() as session:
                 sql = delete(Tag).where(Tag.device_id == int(id))
                 session.execute(sql)
-                sql = delete(Device).where(Device.id == int(id))
+                sql = delete(ModbusDevice).where(ModbusDevice.id == int(id))
                 session.execute(sql)
                 session.commit()
                 return redirect(self.name)
 
-        devices = Device.query.all()
+        devices = ModbusDevice.query.all()
         return render_template("modbus_devices.html", devices=devices)
 
     def route_index(self):
@@ -69,7 +69,7 @@ class Modbus(BasePlugin):
         def point_modbus_device(device_id=None):
             with session_scope() as session:
                 if request.method == "GET":
-                    dev = Device.get_by_id(device_id)
+                    dev = ModbusDevice.get_by_id(device_id)
                     device = row2dict(dev)
                     device['tags'] = []
                     tags = Tag.query.filter(Tag.device_id == device_id).all()
@@ -79,9 +79,9 @@ class Modbus(BasePlugin):
                 if request.method == "POST":
                     data = request.get_json()
                     if data['id']:
-                        device = session.query(Device).where(Device.id == int(data['id'])).one()
+                        device = session.query(ModbusDevice).where(ModbusDevice.id == int(data['id'])).one()
                     else:
-                        device = Device()
+                        device = ModbusDevice()
                         session.add(device)
                         session.commit()
 
@@ -127,7 +127,7 @@ class Modbus(BasePlugin):
                    
     def search(self, query: str) -> list:
         res = []
-        devices = Device.query.filter(Device.title.contains(query)).all()
+        devices = ModbusDevice.query.filter(ModbusDevice.title.contains(query)).all()
         for device in devices:
             res.append({"url":f'Modbus?op=edit&device={device.id}', "title":f'{device.title}', "tags":[{"name":"Modbus","color":"success"}]})
         tags = Tag.query.filter(or_(Tag.linked_object.contains(query),Tag.linked_property.contains(query))).all()
@@ -145,7 +145,7 @@ class Modbus(BasePlugin):
             for tag in tags:
                 if tag.checked and tag.checked > now - datetime.timedelta(milliseconds=tag.pool_period):
                     continue
-                device = session.query(Device).filter(Device.id == tag.device_id).one_or_none()
+                device = session.query(ModbusDevice).filter(ModbusDevice.id == tag.device_id).one_or_none()
                 if device:
                     client = None
                     if device.protocol == 'TCP':
@@ -252,7 +252,7 @@ class Modbus(BasePlugin):
         with session_scope() as session:
             tags = session.query(Tag).filter(Tag.linked_object == obj, Tag.linked_property == prop_name).all()
             for tag in tags:
-                device = session.query(Device).filter(Device.id == tag.device_id).one_or_none()
+                device = session.query(ModbusDevice).filter(ModbusDevice.id == tag.device_id).one_or_none()
                 client = None
                 if device.protocol == 'TCP':
                     client = ModbusClient.ModbusTcpClient(
