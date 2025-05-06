@@ -1,6 +1,6 @@
 from app.database import Column, SurrogatePK, db
 
-class Tag(SurrogatePK, db.Model):
+class ModbusTag(SurrogatePK, db.Model):
     __tablename__ = 'modbus_tags'
     title = Column(db.String(100))
     value = Column(db.String(255))

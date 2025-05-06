@@ -7,11 +7,10 @@ import time
 import datetime
 from flask import redirect, render_template, jsonify, request
 from sqlalchemy import delete, or_
-from sqlalchemy.sql import func
-from app.database import session_scope, row2dict
+from app.database import session_scope, row2dict, get_now_to_utc
 from app.core.main.BasePlugin import BasePlugin
 from plugins.Modbus.models.Device import ModbusDevice
-from plugins.Modbus.models.Tags import Tag
+from plugins.Modbus.models.Tags import ModbusTag
 from app.authentication.handlers import handle_admin_required
 from app.core.lib.object import setProperty, updateProperty, setLinkToObject, removeLinkFromObject
 import pymodbus.client as ModbusClient
@@ -34,11 +33,7 @@ class Modbus(BasePlugin):
         self.category = "Devices"
         self.version = "0.1"
         self.sock = None
-        
         self.latest_data_received = time.time()
-        
-        import logging
-        self.logger.setLevel(logging.DEBUG)
 
     def initialization(self):
         pass
@@ -48,10 +43,10 @@ class Modbus(BasePlugin):
         op = request.args.get("op", None)
         if op == 'add' or op == 'edit':
             return render_template("modbus_device.html", id=id)
-        
+
         if op == 'delete':
             with session_scope() as session:
-                sql = delete(Tag).where(Tag.device_id == int(id))
+                sql = delete(ModbusTag).where(ModbusTag.device_id == int(id))
                 session.execute(sql)
                 sql = delete(ModbusDevice).where(ModbusDevice.id == int(id))
                 session.execute(sql)
@@ -59,6 +54,7 @@ class Modbus(BasePlugin):
                 return redirect(self.name)
 
         devices = ModbusDevice.query.all()
+        devices = [row2dict(device) for device in devices]
         return render_template("modbus_devices.html", devices=devices)
 
     def route_index(self):
@@ -72,7 +68,7 @@ class Modbus(BasePlugin):
                     dev = ModbusDevice.get_by_id(device_id)
                     device = row2dict(dev)
                     device['tags'] = []
-                    tags = Tag.query.filter(Tag.device_id == device_id).all()
+                    tags = ModbusTag.query.filter(ModbusTag.device_id == device_id).all()
                     for tag in tags:
                         device['tags'].append(row2dict(tag))
                     return jsonify(device)
@@ -92,9 +88,9 @@ class Modbus(BasePlugin):
                     device.slave = data['slave']
 
                     for tag in data['tags']:
-                        rec = session.query(Tag).filter(Tag.id == tag['id']).one_or_none()
+                        rec = session.query(ModbusTag).filter(ModbusTag.id == tag['id']).one_or_none()
                         if not rec:
-                            rec = Tag()
+                            rec = ModbusTag()
                             session.add(rec)
                             session.commit()
                         if "del" in tag:
@@ -122,15 +118,15 @@ class Modbus(BasePlugin):
                                 setLinkToObject(rec.linked_object, rec.linked_property, self.name)
 
                     session.commit()
-                    
+
                     return 'Device updated successfully', 200
-                   
+
     def search(self, query: str) -> list:
         res = []
         devices = ModbusDevice.query.filter(ModbusDevice.title.contains(query)).all()
         for device in devices:
             res.append({"url":f'Modbus?op=edit&device={device.id}', "title":f'{device.title}', "tags":[{"name":"Modbus","color":"success"}]})
-        tags = Tag.query.filter(or_(Tag.linked_object.contains(query),Tag.linked_property.contains(query))).all()
+        tags = ModbusTag.query.filter(or_(ModbusTag.linked_object.contains(query),ModbusTag.linked_property.contains(query))).all()
         for device in tags:
             res.append({"url":f'Modbus?op=edit&device={device.device_id}', "title":f'{device.title}', "tags":[{"name":"Modbus","color":"success"}]})
         return res
@@ -138,10 +134,10 @@ class Modbus(BasePlugin):
     def cyclic_task(self):
         with session_scope() as session:
             # Текущая дата и время
-            now = datetime.datetime.now()
+            now = get_now_to_utc()
 
             # Получаем записи, где дата меньше текущей даты минус интервал
-            tags = session.query(Tag).all() # TODO уменьшить выборку ???
+            tags = session.query(ModbusTag).all()  # TODO уменьшить выборку ???
             for tag in tags:
                 if tag.checked and tag.checked > now - datetime.timedelta(milliseconds=tag.pool_period):
                     continue
@@ -222,7 +218,7 @@ class Modbus(BasePlugin):
                         tag.checked = now
                         session.commit()
 
-                        #self.logger.debug("%s %s %s %s",str(rr.registers),str(value),tag.converter,tag.bit_order)
+                        self.logger.debug("%s %s %s %s",str(rr.registers),str(value),tag.converter,tag.bit_order)
 
                         if tag.linked_object and tag.linked_object:
                             if tag.only_changed:
@@ -233,11 +229,11 @@ class Modbus(BasePlugin):
                     except ModbusException as exc:
                         self.logger.error(f"Received ModbusException({exc}) from library")
                         client.close()
-                        
+
                     if rr and rr.isError():
                         self.logger.error(f"Received Modbus library error({rr})")
                         client.close()
-                        
+
                     if isinstance(rr, ExceptionResponse):
                         self.logger.error(f"Received Modbus library exception ({rr})")
                         # THIS IS NOT A PYTHON EXCEPTION, but a valid modbus message
@@ -246,11 +242,11 @@ class Modbus(BasePlugin):
                     client.close()
 
             self.event.wait(1.0)
-        
+
     def changeLinkedProperty(self, obj, prop_name, value):
         self.logger.info("PropertySetHandle: %s.%s=%s",obj,prop_name,value)
         with session_scope() as session:
-            tags = session.query(Tag).filter(Tag.linked_object == obj, Tag.linked_property == prop_name).all()
+            tags = session.query(ModbusTag).filter(ModbusTag.linked_object == obj, ModbusTag.linked_property == prop_name).all()
             for tag in tags:
                 device = session.query(ModbusDevice).filter(ModbusDevice.id == tag.device_id).one_or_none()
                 client = None
@@ -312,7 +308,7 @@ class Modbus(BasePlugin):
                         builder.add_string(value)
                     else:
                         builder.add_bits(value)
-                    
+
                     # write registers
                     registers = builder.to_registers()
                     client.write_registers(tag.request_start, registers, slave=device.slave)
